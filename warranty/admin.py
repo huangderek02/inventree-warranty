@@ -15,7 +15,12 @@ from .models import SafetyCultureRecord
 logger = logging.getLogger(__name__)
 
 
-def _headers(token: str) -> Dict[str, str]:
+def _model_and_years_from_serial(unit_sn: str) -> tuple[str, int]:
+    s = (unit_sn or "").strip().upper()
+    return s[:3], 3
+
+
+def _headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
 
@@ -181,29 +186,32 @@ def _parse_iso_date(s):
         return None
 
 
-def sync_from_safetyculture(modeladmin, request, queryset):
-    """Admin action: read audits and upsert SafetyCultureRecord by unit_sn."""
+# --- add near the top of admin.py (beneath your helpers) ---
+def run_sc_sync(*, print_each: bool = False) -> dict:
+    """
+    Core SafetyCulture → DB sync.
+    Returns dict of counters. No messages / request needed.
+    """
+
     p = registry.get_plugin("warranty")
 
     def _get(name, default=""):
         try:
-            if p:
-                v = p.get_setting(name)
-                if isinstance(v, str) and v:
-                    return v
+            v = p.get_setting(name) if p else None
+            if isinstance(v, str) and v.strip():
+                return v
         except Exception:
             pass
+        import os
+
         return os.environ.get(name, default)
 
-    base_url = _get("SC_BASE_URL", "https://api.safetyculture.io").rstrip("/")
-    token = _get("SC_API_TOKEN")
-    template_id = _get("SC_TEMPLATE_ID")
+    base_url = (_get("SC_BASE_URL", "https://api.safetyculture.io")).rstrip("/")
+    token = (_get("SC_API_TOKEN") or "").strip()
+    template_id = (_get("SC_TEMPLATE_ID") or "").strip()
+
     if not token or not template_id:
-        messages.error(
-            request,
-            "Set SC_API_TOKEN and SC_TEMPLATE_ID in Plugin settings or environment.",
-        )
-        return
+        raise RuntimeError("Set SC_API_TOKEN and SC_TEMPLATE_ID")
 
     lbl_audit = _get("LABEL_AUDIT_DATE", "Conducted on")
     lbl_ums = _get("LABEL_UMS_SN", "UMS QR Code")
@@ -211,38 +219,11 @@ def sync_from_safetyculture(modeladmin, request, queryset):
     lbl_sn = _get("LABEL_UNIT_SN", "Unit Serial Number")
     rules = _get("SERIAL_PREFIX_RULES", '{"IG":{"length":3,"warranty":3}}')
 
-    # Preflight log: show sample audit ids
-    try:
-        r = requests.get(
-            f"{base_url}/audits/search",
-            headers=_headers(token),
-            params=[("field", "audit_id"), ("template", template_id), ("limit", "10")],
-            timeout=60,
-        )
-        r.raise_for_status()
-        j = r.json() or {}
-        logger.info(
-            "SC template=%s total=%s sample=%s",
-            template_id,
-            j.get("total"),
-            [a.get("audit_id") for a in (j.get("audits") or [])],
-        )
-    except Exception as e:
-        logger.warning("Prefetch failed for template %s: %s", template_id, e)
-
-    print_each = os.getenv("PRINT_AUDITS", "1") == "1"
     created = updated = skipped = errors = 0
 
     for aid in _list_all_audits(base_url, token, template_id, include_archived=False):
         try:
             detail = _get_audit_detail(base_url, token, aid)
-            detail["audit_id"] = aid  # keep SC audit id in payload
-
-            # Ensure audit_id/template_id are present in the saved payload
-            if not isinstance(detail, dict):
-                detail = {}
-                detail.setdefault("audit_id", aid)
-                detail.setdefault("template_id", template_id)
 
             unit_sn = (_find_by_label(detail, lbl_sn) or "").strip()
             if not unit_sn:
@@ -309,39 +290,33 @@ def sync_from_safetyculture(modeladmin, request, queryset):
                     if obj.tm_device_id != tm_id:
                         obj.tm_device_id = tm_id
                         changed = True
-                    need_payload = (
-                        not obj.payload
-                        or obj.payload != detail
-                        or not (
-                            (obj.payload or {}).get("audit_id")
-                            or ((obj.payload or {}).get("audit_data") or {}).get(
-                                "audit_id"
-                            )
-                        )
-                    )
-                    if need_payload:
-                        obj.payload = detail
-                        changed = True
-
+                    obj.payload = detail
                     if changed:
                         obj.save()
                         updated += 1
                     else:
                         skipped += 1
-                unit_sn = (_find_by_label(detail, lbl_sn) or "").strip()
-                if not unit_sn or unit_sn.upper() in {"TBA", "N/A", "-", "--"}:
-                    skipped += 1
-                    continue
 
-        except Exception as e:
+        except Exception:
             errors += 1
-            if print_each:
-                logger.exception("Audit %s failed: %s", aid, e)
+            logger.exception("Audit %s failed", aid)
 
-    msg = f"SafetyCulture sync complete. created={created}, updated={updated}, skipped={skipped}"
-    if errors:
-        msg += f", errors={errors}"
-    messages.success(request, msg)
+    return dict(created=created, updated=updated, skipped=skipped, errors=errors)
+
+
+def sync_from_safetyculture(modeladmin, request, queryset):
+    try:
+        result = run_sc_sync(print_each=(os.getenv("PRINT_AUDITS", "0") == "1"))
+        msg = (
+            "SafetyCulture sync complete. "
+            f"created={result['created']}, updated={result['updated']}, "
+            f"skipped={result['skipped']}"
+        )
+        if result.get("errors"):
+            msg += f", errors={result['errors']}"
+        messages.success(request, msg)
+    except Exception as e:
+        messages.error(request, str(e))
 
 
 sync_from_safetyculture.short_description = "Sync from SafetyCulture (default template)"

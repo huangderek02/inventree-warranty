@@ -63,3 +63,20 @@ class Warranty(AppMixin, SettingsMixin, InvenTreePlugin):
             "default": '{"IG": {"length": 3, "warranty": 3}}',
         },
     }
+
+    # Run once every 24 hours
+    SCHEDULED_TASKS = {
+        "warranty-sync-daily": {
+            "func": "scheduled_sync_from_sc",
+            "schedule": "I",  # interval
+            "minutes": 1440,  # 24h
+        },
+    }
+
+    def scheduled_sync_from_sc(self):
+        """Background worker entrypoint – no args allowed."""
+        from . import admin as warranty_admin
+
+        res = warranty_admin.run_sc_sync(print_each=False)
+        logger = __import__("logging").getLogger(__name__)
+        logger.info("Daily SafetyCulture sync: %s", res)
