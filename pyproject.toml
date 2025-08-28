@@ -4,19 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "warranty"
-version = "0.1.0"
+version = "0.1.0"                # bump this when you tag (e.g. 0.1.1)
 description = "Warranty plugin for InvenTree"
-readme = { text = "Warranty plugin for InvenTree.", content-type = "text/plain" }  # or file=...
+readme = { text = "Warranty plugin for InvenTree.", content-type = "text/plain" }
 requires-python = ">=3.11"
 license = { text = "BSD-2-Clause" }
 authors = [{ name = "John Doe" }]
 keywords = ["inventree", "plugin"]
-# If your plugin code uses these (it does):
 dependencies = ["requests", "python-dateutil"]
 
 [project.entry-points."inventree_plugins"]
 warranty = "warranty.core:Warranty"
 
-[tool.ruff]
-exclude = [".git","__pycache__","test.py","tests","venv","env",".venv",".env"]
-src = ["warranty"]
+[tool.setuptools.packages.find]
+include = ["warranty*"]          # <— ensure the package is discovered
+
+# If you have static/assets/templates (keep or delete if not needed)
+[tool.setuptools.package-data]
+"warranty" = ["**/*.js", "**/*.css", "**/*.json", "**/*.html", "**/*.txt", "static/**/*", "templates/**/*"]
