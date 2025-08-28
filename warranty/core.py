@@ -64,7 +64,7 @@ class Warranty(AppMixin, SettingsMixin, InvenTreePlugin):
         },
     }
 
-    # Run once every 24 hours
+    # run once every 24 hours
     SCHEDULED_TASKS = {
         "warranty-sync-daily": {
             "func": "scheduled_sync_from_sc",
