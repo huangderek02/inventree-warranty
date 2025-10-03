@@ -8,35 +8,35 @@ A plugin for integrating warranty records from SafetyCulture into InvenTree.
 
 You can install the plugin either using the **InvenTree Plugin Manager** (recommended) or manually from the command line (useful for local development).
 
-### Option 1: InvenTree Plugin Manager
+### Option 1 — InvenTree Plugin Manager
 
-1. Open InvenTree as an administrator.  
+1. Open InvenTree as an **administrator**.  
 2. Go to **Admin → Plugins → Install**.  
-3. Search for `warranty` (if published to PyPI) or provide the GitHub URL if not yet on PyPI.  
-   - Example:  
-     ```
-     https://github.com/inventree/warranty
-     ```
+3. Search for `warranty` (if published to PyPI) **or** provide the GitHub URL if not yet on PyPI:  
+https://github.com/inventree/warranty
+
+markdown
+Copy code
 4. Enable the plugin in **Admin → Plugins → warranty**.
 
-### Option 2: Command Line
+### Option 2 — Command Line (pip)
 
-To install manually via the command line, run:
+#### 2.1 Install
 
 ```bash
 pip install warranty
-Or, if developing locally from source:
+Or, for local development from source (editable mode):
 
 bash
 Copy code
 python -m pip install -U -e /workspaces/inventree-plugin/Warranty
-Verify the plugin is registered
+2.2 Verify the plugin is registered
 From your InvenTree backend folder (e.g. /home/inventree/src/backend/InvenTree):
 
 bash
 Copy code
 python manage.py shell -c "from plugin import registry; print(bool(registry.get_plugin('warranty')))"
-If successful, this will print:
+Expected output:
 
 graphql
 Copy code
@@ -44,8 +44,7 @@ True
 ⚙️ Configuration
 The plugin requires SafetyCulture credentials and a template ID. These are stored as plugin settings inside the InvenTree database.
 
-Run the following command to configure:
-
+1) Configure via Django shell
 bash
 Copy code
 python manage.py shell -c "
@@ -57,27 +56,29 @@ p.set_setting('SC_TEMPLATE_ID',os.environ['SC_TEMPLATE_ID'])
 p.set_setting('SC_BASE_URL',   os.environ.get('SC_BASE_URL','https://api.safetyculture.io'))
 print('saved:', len(p.get_setting('SC_API_TOKEN')), p.get_setting('SC_TEMPLATE_ID'))
 "
-Required settings
+2) Required settings
 SC_API_TOKEN – SafetyCulture API token.
 
 SC_TEMPLATE_ID – Template ID for warranty records.
 
-Optional settings
+3) Optional settings
 SC_BASE_URL – API base URL (default: https://api.safetyculture.io).
 
-LABEL_UNIT_SN – Override label for serial numbers (e.g. "Unit QR Code").
+LABEL_UNIT_SN – Override label for serial numbers (e.g., "Unit QR Code").
 
-Example of setting an optional label:
+Example (set an optional label):
 
 python
 Copy code
+from plugin import registry
+p = registry.get_plugin('warranty')
 p.set_setting('LABEL_UNIT_SN', 'Unit QR Code')
 ▶️ Usage
-1. Sync SafetyCulture Records
-You can sync data manually from the Admin UI:
+1) Sync SafetyCulture records
+From the Admin UI:
 Plugins → Warranty → Actions → Sync from SafetyCulture
 
-Or programmatically from the shell:
+Or programmatically (same as the Admin action):
 
 bash
 Copy code
@@ -98,9 +99,7 @@ setattr(req, '_messages', FallbackStorage(req))
 ma = SafetyCultureRecordAdmin(SafetyCultureRecord, admin.site)
 sync_from_safetyculture(ma, req, SafetyCultureRecord.objects.none())
 PY
-2. Verify Data Import
-Check that records were created:
-
+2) Verify data import
 bash
 Copy code
 python manage.py shell -c "
@@ -108,23 +107,23 @@ from warranty.models import SafetyCultureRecord as R
 print('rows:', R.objects.count())
 print(list(R.objects.order_by('-audit_date').values('unit_sn','model_number','audit_date','warranty_expiry')[:10]))
 "
-This will show the number of imported rows and sample records with fields like unit_sn, model_number, audit_date, and warranty_expiry.
+This prints the number of imported rows and a sample of records with fields like unit_sn, model_number, audit_date, and warranty_expiry.
 
 🚀 Quickstart Script
-For local dev or quick setup, you can use the following Bash script (requires environment variables SC_API_TOKEN and SC_TEMPLATE_ID to be set):
+For local dev or quick setup (requires SC_API_TOKEN and SC_TEMPLATE_ID environment variables):
 
 bash
 Copy code
 #!/usr/bin/env bash
 set -e
 
-# Install the plugin
+# 1) Install the plugin
 pip install warranty
 
-# Verify plugin is loaded
-python manage.py shell -c "from plugin import registry; print('Plugin loaded:', bool(registry.get_plugin('warranty')))"
+# 2) Verify plugin is loaded
+python manage.py shell -c "from plugin import registry; print('Plugin loaded:', bool(registry.get_plugin('warranty')))";
 
-# Configure settings
+# 3) Configure settings
 python manage.py shell -c "
 import os
 from plugin import registry
@@ -135,7 +134,7 @@ p.set_setting('SC_BASE_URL',   os.environ.get('SC_BASE_URL','https://api.safetyc
 print('Settings saved')
 "
 
-# Run sync
+# 4) Run sync (same as Admin Action)
 python manage.py shell <<'PY'
 from django.test.client import RequestFactory
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -155,21 +154,21 @@ sync_from_safetyculture(ma, req, SafetyCultureRecord.objects.none())
 print("Sync complete")
 PY
 
-# Verify data
+# 5) Verify data
 python manage.py shell -c "
 from warranty.models import SafetyCultureRecord as R
 print('rows:', R.objects.count())
 print(list(R.objects.order_by('-audit_date').values('unit_sn','model_number','audit_date','warranty_expiry')[:5]))
 "
-Save this as setup_warranty.sh, run chmod +x setup_warranty.sh, and execute it after setting your environment variables.
+Save as setup_warranty.sh, chmod +x setup_warranty.sh, then run it after exporting your env vars.
 
-✅ Summary
+# Summary
 Install the plugin (pip install warranty or via Plugin Manager).
 
 Verify it loads (registry.get_plugin('warranty') → True).
 
 Configure SafetyCulture settings (SC_API_TOKEN, SC_TEMPLATE_ID, SC_BASE_URL).
 
-Run a sync (UI or shell).
+Sync data (UI or shell).
 
 Verify records were created.
