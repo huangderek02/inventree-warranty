@@ -15,9 +15,11 @@ You can install the plugin either using the **InvenTree Plugin Manager** (recomm
 3. Search for `warranty` (if published to PyPI) **or** provide the GitHub URL if not yet on PyPI:  
 https://github.com/inventree/warranty
 
-markdown
+yaml
 Copy code
 4. Enable the plugin in **Admin → Plugins → warranty**.
+
+---
 
 ### Option 2 — Command Line (pip)
 
@@ -121,7 +123,7 @@ set -e
 pip install warranty
 
 # 2) Verify plugin is loaded
-python manage.py shell -c "from plugin import registry; print('Plugin loaded:', bool(registry.get_plugin('warranty')))";
+python manage.py shell -c "from plugin import registry; print('Plugin loaded:', bool(registry.get_plugin('warranty')))"
 
 # 3) Configure settings
 python manage.py shell -c "
@@ -146,6 +148,20 @@ from warranty.models import SafetyCultureRecord
 rf = RequestFactory()
 req = rf.get('/')
 SessionMiddleware(lambda r: None).process_request(req)
+req.session.save()
+setattr(req, '_messages', FallbackStorage(req))
+
+ma = SafetyCultureRecordAdmin(SafetyCultureRecord, admin.site)
+sync_from_safetyculture(ma, req, SafetyCultureRecord.objects.none())
+print('Sync complete')
+PY
+
+# 5) Verify data
+python manage.py shell -c "
+from warranty.models import SafetyCultureRecord as R
+print('rows:', R.objects.count())
+print(list(R.objects.order_by('-audit_date').values('unit_sn','model_number','audit_date','warranty_expiry')[:5]))
+"
 req.session.save()
 setattr(req, '_messages', FallbackStorage(req))
 
