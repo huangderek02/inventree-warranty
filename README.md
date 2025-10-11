@@ -11,7 +11,7 @@ This guide explains **exactly which directories** to use to install and enable t
 ## Prerequisites
 
 ```bash
-ssh root@139.84.201.15
+ssh 
 cd ~/Inventree-Docker
 docker compose up -d
 docker compose ps
