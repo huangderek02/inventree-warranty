@@ -1,5 +1,5 @@
-ChatGPT said:
-# Warranty Plugin — Where to Install on `http://139.84.201.15:8000/`
+
+# Warranty Plugin — Where to Install on 
 
 This guide explains **exactly which directories** to use to install and enable the `warranty` plugin on your remote Docker host at `139.84.201.15` (project at `~/Inventree-Docker`). It covers two supported approaches:
 
