@@ -338,3 +338,4 @@ class SafetyCultureRecordAdmin(admin.ModelAdmin):
 
 
 # SC API Token: 7411e799480279aab66382cf9156b9f26481bbdf1cf450f5e34964a3b9168db4
+# Inventree API Token: inv-3f994b27bfff196cf8a0d4bea436249b29857a3d-20250911
