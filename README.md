@@ -18,8 +18,12 @@ End-to-end guide to install, enable, configure SafetyCulture credentials, run a 
 ```bash
 ssh root@139.84.201.15
 # Accept the host key on first connect
-1) Bring Stack Up & Detect Backend Path
-bash
+
+---
+
+## 1) Bring Stack Up & Detect Backend Path
+
+```bash
 Copy code
 cd ~/inventree-docker
 docker compose up -d
