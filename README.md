@@ -1,9 +1,9 @@
-# Warranty Plugin — Full Install & Configure (Remote Docker @ `http://139.84.201.15/`)
+# Warranty Plugin — Full Install & Configure ()
 
 This runbook installs the **warranty** InvenTree plugin end-to-end on your remote server, **enables** it, **sets SafetyCulture credentials**, runs a **sync**, and verifies the import.
 
 > Assumptions  
-> - You can SSH to the host: `ssh root@139.84.201.15` (use your auth method)  
+> - You can SSH to the host: `ssh root@` (use your auth method)  
 > - Your InvenTree stack runs with Docker Compose in `~/inventree-docker`  
 > - You want plugin ref/tag **`v0.2.0`** from `huangderek02/inventree-warranty`  
 > - You have your SafetyCulture **Template ID** and **API token** handy
@@ -204,7 +204,7 @@ docker compose restart inventree-server
 
 Proxy but site won’t open
 
-Use http://139.84.201.15/ (port 80 via proxy), not :8000
+Use http:/// (port 80 via proxy), not :8000
 
 Open firewall: ufw allow 80/tcp (and 443/tcp if using TLS)
 
