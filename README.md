@@ -13,7 +13,7 @@ This runbook installs the **warranty** InvenTree plugin end-to-end on your remot
 ## 🧰 Step 0 — SSH into the server
 
 ```bash
-ssh root@139.84.201.15
+ssh root@
 # If first time, accept the host key
 🚀 Step 1 — Bring the stack up & detect backend path
 bash
