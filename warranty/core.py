@@ -27,7 +27,9 @@ class Warranty(AppMixin, SettingsMixin, InvenTreePlugin):
     TITLE = "Warranty"
     NAME = "warranty"   # Must match the identifier you enable in config.yaml / UI
     SLUG = "warranty"
-    VERSION = "0.2.0"
+    PLUGIN_VERSION = "0.2.0"
+
+    __all__ = ["PLUGIN_VERSION"]
 
     # If you do not ship a custom admin frontend (Settings.js), keep this as None
     ADMIN_SOURCE = None
@@ -110,3 +112,4 @@ class Warranty(AppMixin, SettingsMixin, InvenTreePlugin):
         __import__("logging").getLogger(__name__).info(
             "Daily SafetyCulture sync: %s", result
         )
+
