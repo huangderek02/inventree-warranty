@@ -16,77 +16,33 @@ from django.core.validators import RegexValidator
 
 
 class SafetyCultureRecord(models.Model):
-    """
-    One row per device/unit discovered from a SafetyCulture audit.
+    # NEW: the SafetyCulture audit id (unique)
+    audit_id = models.CharField(max_length=64, unique=True, null=True, blank=True, db_index=True)
 
-    Key fields:
-      - unit_sn:        Primary key, e.g., "IG1xxxx…" (validated to start with IG1)
-      - model_number:   Derived from the serial (first 3 chars, uppercased)
-      - ums_sn:         Normalized to "xxxx-xxxx" if digits are provided
-      - audit_date:     Parsed audit completion date
-      - warranty_expiry:Computed as audit_date + 3 years (by default)
-      - tm_device_id:   Optional TM identifier (e.g., "TM017123")
-      - payload:        Raw JSON payload for debugging / traceability
-
-    Timestamps:
-      - created / updated are auto-maintained by Django
-    """
+    # NEW: the audit's modified timestamp from SC (UTC)
+    sc_modified_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     # Primary key = Unit Serial Number (must start with IG1…)
     unit_sn = models.CharField(
         max_length=64,
         primary_key=True,
-        validators=[
-            RegexValidator(
-                r"^IG1[A-Z0-9]+$",
-                "Unit Serial Number must start with IG1 and contain only A–Z / 0–9 after the prefix",
-            )
-        ],
-        help_text="Primary key, e.g. IG1xxxx… (duplicates are prevented by PK constraint).",
+        validators=[RegexValidator(r"^IG1[A-Z0-9]+$", "Unit Serial Number must start with IG1")],
     )
 
-    # First 3 characters of the serial (auto-filled in save)
-    model_number = models.CharField(
-        max_length=16,
-        blank=True,
-        help_text="Derived from unit_sn (first 3 chars, uppercased).",
-    )
+    model_number = models.CharField(max_length=16, blank=True)
 
-    # Must be xxxx-xxxx (normalized in save if digits are provided)
     ums_sn = models.CharField(
-        max_length=9,
-        blank=True,   # allow empty in forms
-        null=True,    # allow NULL in DB
+        max_length=9, blank=True, null=True,
         validators=[RegexValidator(r"^\d{4}-\d{4}$", "UMS SN must be in xxxx-xxxx format")],
-        help_text="UMS serial in '1234-5678' format. If digits supplied, will be normalized on save.",
     )
 
-    audit_date = models.DateField(help_text="Audit completion date (YYYY-MM-DD).")
+    audit_date = models.DateField()
+    warranty_expiry = models.DateField(blank=True, null=True)
+    tm_device_id = models.CharField(max_length=32, blank=True, null=True)
+    payload = models.JSONField(blank=True, null=True)
 
-    # Auto-set from audit_date (+3 years) during save unless already set
-    warranty_expiry = models.DateField(
-        blank=True,
-        null=True,
-        help_text="Auto: audit_date + 3 years (can be overridden if set explicitly).",
-    )
-
-    tm_device_id = models.CharField(
-        max_length=32,
-        blank=True,
-        null=True,
-        help_text="Optional TM/Unit QR Code identifier.",
-    )
-
-    # Keep a copy of the parsed SafetyCulture audit JSON for traceability
-    payload = models.JSONField(
-        blank=True,
-        null=True,
-        help_text="Raw SafetyCulture audit JSON payload (optional, for debugging).",
-    )
-
-    # Timestamps
-    created = models.DateTimeField(auto_now_add=True, help_text="Row creation timestamp.")
-    updated = models.DateTimeField(auto_now=True, help_text="Row last update timestamp.")
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
 
     class Meta:
         # Useful default ordering when listing in admin/UI
