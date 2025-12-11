@@ -1,7 +1,5 @@
-# setup.py — do NOT import the package here.
 from setuptools import setup, find_packages
 from pathlib import Path
-from warranty import PLUGIN_VERSION
 
 # Single source of truth for version — change as needed
 VERSION = "0.2.0"
@@ -11,16 +9,17 @@ long_description = README.read_text(encoding="utf-8") if README.exists() else ""
 
 setup(
     name="warranty",
-    version=PLUGIN_VERSION,   # <-- ensure this uses PLUGIN_VERSION
+    version=VERSION,  # <-- use the constant here
     packages=find_packages(),
     install_requires=[
         "requests",
         "python-dateutil",
     ],
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: BSD License",
         "Framework :: Django",
     ],
 )
-
