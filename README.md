@@ -52,10 +52,9 @@ Adjust the directory path to match your image (inventree vs invenree).
 
 bash
 Copy code
-mkdir -p ./data
-if ! grep -qE '^\s*plugins:' ./data/config.yaml 2>/dev/null; then
+if ! grep -qE '^\s*plugins:' inventree-data/config.yaml 2>/dev/null; then
   # Create a minimal config.yaml
-  cat > ./data/config.yaml <<'YAML'
+  cat > inventree-data/config.yaml <<'YAML'
 plugins:
   directory: /home/inventree/plugins
   enabled:
@@ -76,7 +75,7 @@ else
         print "    - warranty"
       }
     }
-  ' ./data/config.yaml > ./data/config.yaml.tmp && mv ./data/config.yaml.tmp ./data/config.yaml
+  ' inventree-data/config.yaml > inventree-data/config.yaml.tmp && mv inventree-data/config.yaml.tmp inventree-data/config.yaml
 fi
 
 # If your image uses /home/invenree, edit the directory line accordingly.
@@ -192,7 +191,7 @@ Admin list: http://139.84.201.15/admin/warranty/safetyculturerecord/
 🩺 Troubleshooting Cheats
 Plugin not listed / not active
 
-Ensure ./data/config.yaml contains:
+Ensure inventree-data/config.yaml contains:
 
 yaml
 Copy code
