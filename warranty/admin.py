@@ -337,10 +337,10 @@ class SafetyCultureRecordAdmin(admin.ModelAdmin):
     search_fields = ("unit_sn", "model_number", "ums_sn", "tm_device_id", "audit_id")
     list_filter = ("audit_date",)
     actions = [sync_from_safetyculture, verify_all_synced]
-try:
-    admin.site.register(SafetyCultureRecord, SafetyCultureRecordAdmin)
-except AlreadyRegistered:
-    pass
+# try:
+#     admin.site.register(SafetyCultureRecord, SafetyCultureRecordAdmin)
+# except AlreadyRegistered:
+#     pass
 
 # SC API Token: 7411e799480279aab66382cf9156b9f26481bbdf1cf450f5e34964a3b9168db4
 # Inventree API Token: inv-3f994b27bfff196cf8a0d4bea436249b29857a3d-20250911
