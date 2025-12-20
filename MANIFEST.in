@@ -1,1 +1,2 @@
 recursive-include warranty/static *
+recursive-include warranty/migrations *.py
