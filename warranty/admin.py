@@ -8,6 +8,7 @@ from plugin import registry
 from .models import SafetyCultureRecord
 
 from django.contrib.admin.sites import AlreadyRegistered
+from django.contrib.admin.sites import NotRegistered
 
 logger = logging.getLogger(__name__)
 
@@ -331,16 +332,20 @@ def verify_all_synced(modeladmin, request, queryset):
 
 verify_all_synced.short_description = "Verify all audits are present (no writes)"
 
-@admin.register(SafetyCultureRecord)
 class SafetyCultureRecordAdmin(admin.ModelAdmin):
     list_display = ("unit_sn", "model_number", "audit_date", "warranty_expiry", "ums_sn", "tm_device_id", "audit_id", "sc_modified_at")
     search_fields = ("unit_sn", "model_number", "ums_sn", "tm_device_id", "audit_id")
     list_filter = ("audit_date",)
     actions = [sync_from_safetyculture, verify_all_synced]
-# try:
-#     admin.site.register(SafetyCultureRecord, SafetyCultureRecordAdmin)
-# except AlreadyRegistered:
-#     pass
+try:
+    admin.site.unregister(SafetyCultureRecord)
+except NotRegistered:
+    pass
+
+try:
+    admin.site.register(SafetyCultureRecord, SafetyCultureRecordAdmin)
+except AlreadyRegistered:
+    pass
 
 # SC API Token: 7411e799480279aab66382cf9156b9f26481bbdf1cf450f5e34964a3b9168db4
 # Inventree API Token: inv-3f994b27bfff196cf8a0d4bea436249b29857a3d-20250911
