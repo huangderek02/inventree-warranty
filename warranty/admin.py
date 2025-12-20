@@ -7,6 +7,8 @@ from django.db import transaction
 from plugin import registry
 from .models import SafetyCultureRecord
 
+from django.contrib.admin.sites import AlreadyRegistered
+
 logger = logging.getLogger(__name__)
 
 def _headers(token: str) -> dict[str, str]:
