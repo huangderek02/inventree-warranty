@@ -4,12 +4,14 @@ Django models for the Warranty plugin.
 
 Contains:
 - SafetyCultureRecord: a normalized row per device/unit pulled from SafetyCulture.
-  Uses `unit_sn` as the primary key to prevent duplicates for the same unit.
+  Uses `unit_sn` (e.g., IG1…) as the primary key to prevent duplicates for the same unit.
 
-Design notes:
+- WarrantySyncState: a tiny state row for persisting incremental sync cursors (e.g. last processed
+  SafetyCulture modified_at timestamp).
+
+Notes:
 - Keep this module import-light (no requests, no plugin imports).
-- Business logic that depends on plugin settings (e.g., SERIAL_PREFIX_RULES)
-  should live in admin.py / services modules (sync code), not in model.save().
+- Business logic that touches external APIs or plugin settings should live in admin.py / services.
 """
 
 from django.db import models
@@ -18,84 +20,86 @@ from django.core.validators import RegexValidator
 
 class SafetyCultureRecord(models.Model):
     """
-    One row per unit/device from SafetyCulture.
+    Normalized record for a single unit.
 
-    Key behaviors:
-    - unit_sn is the primary key (dedupe per physical unit)
-    - audit_id is unique (dedupe per SafetyCulture audit)
-    - This model only normalizes data; it does NOT decide warranty years or model parsing.
-      That logic should be done by sync code using SERIAL_PREFIX_RULES.
+    Uniqueness / dedupe:
+    - unit_sn is the PRIMARY KEY: one row per unit.
+    - audit_id is UNIQUE (when present): prevents the same SafetyCulture audit being inserted twice.
+
+    IMPORTANT:
+    - Do not hardcode "model_number length" or "warranty years" in this model.
+      Those are business rules that should be applied by the sync logic (admin.py/services),
+      using your SERIAL_PREFIX_RULES configuration.
     """
 
-    # SafetyCulture audit id (unique per audit)
+    # SafetyCulture audit id (unique, when present)
     audit_id = models.CharField(
         max_length=64,
         unique=True,
         null=True,
         blank=True,
         db_index=True,
-        help_text="SafetyCulture audit_id (unique).",
+        help_text="SafetyCulture audit id (unique when present).",
     )
 
-    # Audit modified timestamp from SafetyCulture (UTC)
+    # audit's modified timestamp from SafetyCulture (UTC)
     sc_modified_at = models.DateTimeField(
         null=True,
         blank=True,
         db_index=True,
-        help_text="SafetyCulture audit modified timestamp (UTC).",
+        help_text="SafetyCulture audit modified_at timestamp (UTC).",
     )
 
-    # Primary key = Unit Serial Number
-    #
-    # If you truly ONLY accept IG1... units, keep this validator.
-    # If you need other prefixes (e.g. OG...), relax it (see comment below).
+    # Primary key = Unit Serial Number (example: IG1…)
     unit_sn = models.CharField(
         max_length=64,
         primary_key=True,
         validators=[
-            RegexValidator(r"^IG1[A-Z0-9]+$", "Unit Serial Number must start with IG1")
-            # If you need to accept more, replace with something like:
-            # RegexValidator(r"^[A-Z0-9]+$", "Unit Serial Number must be alphanumeric (A-Z/0-9)")
+            RegexValidator(
+                r"^IG1[A-Z0-9]+$",
+                "Unit Serial Number must start with IG1",
+            )
         ],
-        help_text="Unit serial number (primary key).",
+        help_text="Unit Serial Number (primary key).",
     )
 
-    # Derived by sync logic (SERIAL_PREFIX_RULES), but we’ll keep a safe fallback if blank
+    # Model number derived by sync logic (based on SERIAL_PREFIX_RULES)
     model_number = models.CharField(
         max_length=16,
         blank=True,
-        help_text="Model identifier (usually derived from unit_sn via SERIAL_PREFIX_RULES).",
+        help_text="Model number derived from serial rules; set by sync logic.",
     )
 
-    # Allow either "1234-5678" OR "12345678" (we normalize to xxxx-xxxx in save()).
     ums_sn = models.CharField(
         max_length=9,
         blank=True,
         null=True,
         validators=[
-            RegexValidator(r"^\d{4}-?\d{4}$", "UMS SN must be in xxxx-xxxx (or xxxxxxxx) format")
+            RegexValidator(
+                r"^\d{4}-\d{4}$",
+                "UMS SN must be in xxxx-xxxx format",
+            )
         ],
-        help_text="UMS serial number (normalized to xxxx-xxxx).",
+        help_text="UMS serial number in xxxx-xxxx format.",
     )
 
     audit_date = models.DateField(help_text="Audit conducted/completed date.")
     warranty_expiry = models.DateField(
         blank=True,
         null=True,
-        help_text="Warranty expiry date (should be computed by sync logic).",
+        help_text="Warranty expiry date (audit_date + years based on serial rules).",
     )
-
     tm_device_id = models.CharField(
         max_length=32,
         blank=True,
         null=True,
-        help_text="TM device ID / Unit QR Code (if present).",
+        help_text="TM Device ID (e.g., Unit QR Code).",
     )
 
     payload = models.JSONField(
         blank=True,
         null=True,
-        help_text="Raw SafetyCulture audit JSON payload (for debugging/auditing).",
+        help_text="Raw SafetyCulture audit payload (JSON).",
     )
 
     created = models.DateTimeField(auto_now_add=True)
@@ -108,75 +112,70 @@ class SafetyCultureRecord(models.Model):
         indexes = [
             models.Index(fields=["audit_date"]),
             models.Index(fields=["model_number"]),
-            # audit_id already has db_index=True above; sc_modified_at too.
+            models.Index(fields=["sc_modified_at"]),
         ]
 
     def __str__(self) -> str:
         return f"{self.unit_sn} ({self.model_number})"
 
+    @staticmethod
+    def normalize_ums_sn(value: str | None) -> str | None:
+        """
+        Normalize UMS serial into 'xxxx-xxxx' if digits are available.
+        """
+        if not value:
+            return None
+        digits = "".join(ch for ch in str(value) if ch.isdigit())
+        if len(digits) >= 8:
+            return f"{digits[:4]}-{digits[4:8]}"
+        return str(value).strip() or None
+
     def save(self, *args, **kwargs):
         """
-        Normalize fields before persisting.
+        Keep save() focused on normalization only.
 
-        IMPORTANT:
-        - Do NOT hardcode model parsing or warranty years here.
-          The sync layer should set `model_number` and `warranty_expiry`
-          using SERIAL_PREFIX_RULES and the audit date.
+        What this DOES:
+        - Normalizes unit_sn to uppercase/trim
+        - Normalizes ums_sn into xxxx-xxxx when possible
+
+        What this DOES NOT do:
+        - Does NOT force model_number from first 3 chars
+        - Does NOT compute warranty_expiry (no hardcoded years)
+        Those are business rules handled by sync logic using SERIAL_PREFIX_RULES.
         """
-        # Normalize unit_sn
         if self.unit_sn:
-            self.unit_sn = str(self.unit_sn).strip().upper()
+            self.unit_sn = self.unit_sn.strip().upper()
 
-        # Only fill model_number if missing (do not overwrite what sync computed)
-        if self.unit_sn and not (self.model_number or "").strip():
+        self.ums_sn = self.normalize_ums_sn(self.ums_sn)
+
+        # If some existing code creates records without model_number, keep a safe fallback,
+        # but do not overwrite values that sync already computed.
+        if self.unit_sn and not self.model_number:
             self.model_number = self.unit_sn[:3]
-
-        # Normalize UMS serial into "xxxx-xxxx" if digits available
-        if self.ums_sn:
-            digits = "".join(ch for ch in str(self.ums_sn) if ch.isdigit())
-            if len(digits) >= 8:
-                self.ums_sn = f"{digits[:4]}-{digits[4:8]}"
 
         return super().save(*args, **kwargs)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Incremental sync cursor state
-#
-# Using audit_id alone as a cursor is often not enough for SafetyCulture search
-# (which is typically "modified_after"). Storing last_modified_at gives you
-# a stable cursor for incremental syncs, and last_audit_id can be used as a
-# tie-breaker if needed.
-# ─────────────────────────────────────────────────────────────────────────────
-
 class WarrantySyncState(models.Model):
     """
-    Persist incremental sync cursors.
+    Tiny singleton row to persist incremental sync cursors.
 
-    Recommended usage (single row):
+    Your sync logic already works in "modified_after / modified_at" terms, so persist the cursor
+    as a UTC datetime (last processed modified_at).
+
+    Usage:
         state, _ = WarrantySyncState.objects.get_or_create(pk="default")
-        state.last_modified_at = <utc datetime>
-        state.last_audit_id = "audit_..."
+        state.sc_sync_cursor = some_datetime_utc
         state.save()
     """
 
     id = models.CharField(primary_key=True, max_length=32, default="default")
 
-    # Optional: last processed audit id (tie-breaker / debugging)
-    last_audit_id = models.CharField(
-        max_length=64,
+    sc_sync_cursor = models.DateTimeField(
         blank=True,
         null=True,
         db_index=True,
-        help_text="Cursor: last processed SafetyCulture audit_id (optional).",
-    )
-
-    # Recommended: last processed modified timestamp from SC (UTC)
-    last_modified_at = models.DateTimeField(
-        blank=True,
-        null=True,
-        db_index=True,
-        help_text="Cursor: last processed SafetyCulture modified_at timestamp (UTC).",
+        help_text="UTC cursor: last processed SafetyCulture modified_at (used for incremental sync).",
     )
 
     updated = models.DateTimeField(auto_now=True)
@@ -186,5 +185,5 @@ class WarrantySyncState(models.Model):
         verbose_name_plural = "Warranty Sync State"
 
     def __str__(self) -> str:
-        lm = self.last_modified_at.isoformat() if self.last_modified_at else "-"
-        return f"WarrantySyncState(pk={self.pk}, last_modified_at={lm}, last_audit_id={self.last_audit_id or '-'})"
+        cur = self.sc_sync_cursor.isoformat() if self.sc_sync_cursor else "-"
+        return f"WarrantySyncState(pk={self.pk}, sc_sync_cursor={cur})"
