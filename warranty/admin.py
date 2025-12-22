@@ -9,6 +9,7 @@ from .models import SafetyCultureRecord
 
 from django.contrib.admin.sites import AlreadyRegistered
 from django.contrib.admin.sites import NotRegistered
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +210,9 @@ def run_sc_sync(*, incremental: bool = True, print_each: bool = False, verify_on
 
             detail = _get_detail(base_url, token, audit_id)
 
-            unit_sn = (_find_by_label(detail, lbl_sn) or "").strip()
+            raw_sn = (_find_by_label(detail, lbl_sn) or "").strip().upper() 
+            m = re.search(r"(IG1[A-Z0-9]+)", raw_sn) 
+            unit_sn = m.group(1) if m else ""
             if not unit_sn:
                 skipped += 1
                 continue
